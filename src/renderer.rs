@@ -4,7 +4,8 @@ use image::GenericImageView;
 use winit::window::Window;
 use wgpu::*;
 use crate::buffer::*;
-
+use winit::dpi::PhysicalSize;
+use crate::config;
 
 pub struct Renderer {
     pub device: Device,
@@ -14,18 +15,15 @@ pub struct Renderer {
     pub config: SurfaceConfiguration,
 
     render_pipeline: RenderPipeline,
-    aspect_ratio: f32,
     viewport_data: [f32; 6],
 
     mesh: Mesh,
     bind_group_layout: BindGroupLayout,
     bind_group: Option<Arc<BindGroup>>,
 }
-
-
 impl Renderer {
     pub async fn new(window: &Window) -> Self {
-        let size = window.inner_size();
+        let size = PhysicalSize::new(config::SCREEN_SIZE[0] * 2, config::SCREEN_SIZE[1] * 2);
         let instance = Instance::new(InstanceDescriptor::default());
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
         let adapter = instance
@@ -71,7 +69,6 @@ impl Renderer {
         };
         surface.configure(&device, &config);
 
-        let aspect_ratio = size.width as f32 / size.height as f32;
         let viewport_data = [0., 0., size.width as f32, size.height as f32, 0., 1.];
 
 
@@ -97,7 +94,7 @@ impl Renderer {
             label: Some("texture_bind_group_layout"),
         });
 
-        let shader = device.create_shader_module(include_wgsl!("../assets/shader/texture.wgsl"));
+        let shader = device.create_shader_module(include_wgsl!("../res/shader/texture.wgsl"));
         let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
@@ -145,7 +142,6 @@ impl Renderer {
             surface,
             queue,
             config,
-            aspect_ratio,
             viewport_data,
             mesh,
             render_pipeline,
@@ -219,6 +215,9 @@ impl Renderer {
 
         self.bind_group = Some(Arc::from(diffuse_bind_group));
     }
+    pub fn update_instance(){
+
+    }
     pub fn render(&self) -> Result<(), SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
@@ -263,7 +262,7 @@ impl Renderer {
                     render_pass.set_bind_group(0, bg, &[]);
                     render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
                     render_pass.set_vertex_buffer(1, self.mesh.instance_buffer.slice(..));
-                    render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), IndexFormat::Uint16);
                     render_pass.draw_indexed(0..self.mesh.num_indices, 0, 0..self.mesh.num_instances);
                 }
             }

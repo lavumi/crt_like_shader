@@ -1,9 +1,10 @@
 struct InstanceInput {
-    @location(4) model_texcoord: vec4<f32>,
-    @location(5) model_matrix_0: vec4<f32>,
-    @location(6) model_matrix_1: vec4<f32>,
-    @location(7) model_matrix_2: vec4<f32>,
-    @location(8) model_matrix_3: vec4<f32>,
+    @location(3) texcoord: vec4<f32>,
+    @location(4) matrix_0: vec4<f32>,
+    @location(5) matrix_1: vec4<f32>,
+    @location(6) matrix_2: vec4<f32>,
+    @location(7) matrix_3: vec4<f32>,
+    @location(8) color: vec4<f32>,
 };
 
 struct VertexInput {
@@ -14,6 +15,7 @@ struct VertexInput {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
+    @location(1) color: vec4<f32>
 }
 
 @vertex
@@ -23,18 +25,19 @@ fn vs_main(
 ) -> VertexOutput {
 
     let model_matrix = mat4x4<f32>(
-        instance.model_matrix_0,
-        instance.model_matrix_1,
-        instance.model_matrix_2,
-        instance.model_matrix_3,
+        instance.matrix_0,
+        instance.matrix_1,
+        instance.matrix_2,
+        instance.matrix_3,
     );
 
     var out: VertexOutput;
     out.tex_coords = vec2(
-    instance.model_texcoord[0] * model.tex_coords[0] + instance.model_texcoord[1] * (1.0-model.tex_coords[0])  ,
-    instance.model_texcoord[2] * model.tex_coords[1] + instance.model_texcoord[3] * (1.0-model.tex_coords[1])
-    );// model.tex_coords + instance.model_texcoord;
+    instance.texcoord[0] * model.tex_coords[0] + instance.texcoord[1] * (1.0-model.tex_coords[0])  ,
+    instance.texcoord[2] * model.tex_coords[1] + instance.texcoord[3] * (1.0-model.tex_coords[1])
+    );
     out.clip_position =  model_matrix * vec4<f32>(model.position, 1.0);
+    out.color = instance.color;
     return out;
 }
 
@@ -53,5 +56,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
 
-    return texture;
+    return in.color;
 }

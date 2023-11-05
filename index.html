@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learn WGPU</title>
+    <style>
+        canvas {
+            background-color: black;
+            padding: 0;
+            margin: auto;
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        body {
+            background-color: black;
+        }
+    </style>
+</head>
+
+<body id="wasm-example">
+<div id="wgpu"></div>
+<script type="module">
+    import init from "./pkg/crt_like_js_renderer.js";
+    init().then(() => {
+        console.log("WASM Loaded", );
+        let canvas = document.getElementById("wasm-canvas");
+        canvas.style.height = "100%";
+        canvas.style.width = "auto";
+        window.init = init;
+    });
+</script>
+</body>
+
+</html>
