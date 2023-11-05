@@ -1,4 +1,5 @@
 use cfg_if::cfg_if;
+use toml::Value;
 // #[cfg(target_arch = "wasm32")]
 // use wasm_bindgen::prelude::*;
 // #[cfg(target_arch = "wasm32")]
@@ -83,3 +84,11 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
 
     Ok(data)
 }
+
+// pub async fn load_toml(file_name: &str) -> anyhow::Result<Value> {
+//     let txt = load_string(file_name).await?;
+//     let toml_value: Value = toml::de::from_str(&txt)
+//         .expect("Failed to parse TOML");
+//
+//     Ok(toml_value)
+// }

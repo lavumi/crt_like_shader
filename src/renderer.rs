@@ -3,9 +3,10 @@ use std::sync::Arc;
 use image::GenericImageView;
 use winit::window::Window;
 use wgpu::*;
+use wgpu::util::DeviceExt;
 use crate::buffer::*;
 use winit::dpi::PhysicalSize;
-use crate::config;
+use crate::config::*;
 
 pub struct Renderer {
     pub device: Device,
@@ -20,10 +21,12 @@ pub struct Renderer {
     mesh: Mesh,
     bind_group_layout: BindGroupLayout,
     bind_group: Option<Arc<BindGroup>>,
+    screen_buffer : Vec<(u8, [f32;3])>
 }
+
 impl Renderer {
-    pub async fn new(window: &Window) -> Self {
-        let size = PhysicalSize::new(config::SCREEN_SIZE[0] * 2, config::SCREEN_SIZE[1] * 2);
+    pub async fn new(window: &Window, game_config: &GameConfig) -> Self {
+        let size = PhysicalSize::new(game_config.options.screen_size[0] * 2, game_config.options.screen_size[1] * 2);
         let instance = Instance::new(InstanceDescriptor::default());
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
         let adapter = instance
@@ -137,6 +140,7 @@ impl Renderer {
 
         let mesh = Mesh::new(&device);
 
+        let mut screen_buffer = game_config.get_map();
         Self {
             device,
             surface,
@@ -147,6 +151,7 @@ impl Renderer {
             render_pipeline,
             bind_group_layout,
             bind_group: None,
+            screen_buffer
         }
     }
 
@@ -215,8 +220,25 @@ impl Renderer {
 
         self.bind_group = Some(Arc::from(diffuse_bind_group));
     }
-    pub fn update_instance(){
+    pub fn update_instance(&mut self){
+        let instances = self.screen_buffer.iter().enumerate().map(|(i, &(char, color))|{
+            TileRenderData{
+                char,
+                position: [i as u32 % SCREEN_COLS, i as u32 / SCREEN_COLS],
+                color
+            }.get_instance_matrix()
+        }).collect::<Vec<_>>();
 
+
+        let instance_buffer = self.device.create_buffer_init(
+            &util::BufferInitDescriptor {
+                label: Some(format!("Instance Buffer").as_str()),
+                contents: bytemuck::cast_slice(&instances),
+                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+            }
+        );
+        let num_instances = instances.len() as u32;
+        self.mesh.replace_instance(instance_buffer, num_instances);
     }
     pub fn render(&self) -> Result<(), SurfaceError> {
         let output = self.surface.get_current_texture()?;

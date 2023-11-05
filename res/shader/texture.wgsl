@@ -4,7 +4,7 @@ struct InstanceInput {
     @location(5) matrix_1: vec4<f32>,
     @location(6) matrix_2: vec4<f32>,
     @location(7) matrix_3: vec4<f32>,
-    @location(8) color: vec4<f32>,
+    @location(8) color: vec3<f32>,
 };
 
 struct VertexInput {
@@ -15,7 +15,7 @@ struct VertexInput {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
-    @location(1) color: vec4<f32>
+    @location(1) color: vec3<f32>
 }
 
 @vertex
@@ -56,5 +56,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
 
-    return in.color;
+    return vec4<f32>(in.color, 1.0);
 }

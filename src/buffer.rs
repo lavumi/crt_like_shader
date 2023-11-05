@@ -29,7 +29,7 @@ impl Vertex {
 pub struct InstanceTileRaw {
     pub uv: [f32; 4],
     pub model: [[f32; 4]; 4],
-    pub color: [f32;4],
+    pub color: [f32;3],
 }
 impl InstanceTileRaw {
     pub fn desc<'a>() -> VertexBufferLayout<'a> {
@@ -66,7 +66,7 @@ impl InstanceTileRaw {
                 VertexAttribute {
                     offset: mem::size_of::<[f32; 20]>() as BufferAddress,
                     shader_location: 8,
-                    format: VertexFormat::Float32x4,
+                    format: VertexFormat::Float32x3,
                 },
             ],
         }
@@ -76,25 +76,28 @@ impl InstanceTileRaw {
 
 
 pub struct TileRenderData {
-    pub uv: [u8; 2],
-    pub position: [u8; 2],
-    pub color : u8
+    pub char: u8,
+    pub position: [u32; 2],
+    pub color : [f32;3]
 }
 
 impl TileRenderData {
     pub fn get_instance_matrix(&self) -> InstanceTileRaw {
+        let char_x = self.char % 16;
+        let char_y = self.char / 16;
+
         let uv = [
-            self.uv[0] as f32 * CHR_UV,
-            (self.uv[0]+1) as f32 * CHR_UV,
-            self.uv[1] as f32 * CHR_UV,
-            (self.uv[1]+1) as f32 * CHR_UV,
+            (char_x) as f32 * CHR_UV,
+            (char_x+1) as f32 * CHR_UV,
+            (char_y) as f32 * CHR_UV,
+            (char_y+1) as f32 * CHR_UV,
         ];
         let model = cgmath::Matrix4::from_translation(cgmath::Vector3 {
             x: self.position[0] as f32 / SCREEN_COLS as f32 * 2.0 - 1.0,
-            y: self.position[1] as f32 / SCREEN_ROWS as f32 * 2.0 - 1.0,
+            y: self.position[1] as f32 / SCREEN_ROWS as f32 * - 2.0 + 1.0,
             z: 0.0
         }).into();
-        let color = [0.0,1.0,1.0,1.0];
+        let color = self.color;
         InstanceTileRaw {
             uv,
             model,
@@ -121,22 +124,22 @@ impl Mesh {
         let vertex: [Vertex; 4] = [
             //Front
             Vertex {
-                position: [0., 0., 0.0],
+                position: [0., -y_size, 0.0],
                 tex_coords: [1.0, 0.0],
                 // tex_coords: [offset[0] , offset[1] + uv_size[1]],
             },
             Vertex {
-                position: [x_size, 0., 0.0],
+                position: [x_size, -y_size, 0.0],
                 tex_coords: [0.0, 0.],
                 // tex_coords: [offset[0] +uv_size[0], offset[1] +uv_size[1]],
             },
             Vertex {
-                position: [x_size, y_size, 0.0],
+                position: [x_size, 0., 0.0],
                 tex_coords: [0.0, 1.0],
                 // tex_coords: [offset[0] +uv_size[0], offset[1] +0.0],
             },
             Vertex {
-                position: [0., y_size, 0.0],
+                position: [0., 0., 0.0],
                 tex_coords: [1.0, 1.0],
                 // tex_coords: offset ,
             }
@@ -167,17 +170,7 @@ impl Mesh {
 
         let num_indices = indices.len() as u32;
 
-        let instances = (0..SCREEN_COLS).flat_map(|x|{
-            (0..SCREEN_ROWS).map(move |y|{
-                TileRenderData{
-                    uv:  [ 0,12 ],
-                    position: [x, y],
-                    color:0
-                }.get_instance_matrix()
-            })
-        }).collect::<Vec<_>>();
-
-
+        let instances:Vec<InstanceTileRaw> = Vec::new();
         let instance_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some(format!("Instance Buffer").as_str()),

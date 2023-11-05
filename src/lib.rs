@@ -7,6 +7,7 @@ use winit::dpi::*;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
+use crate::config::GameConfig;
 use crate::renderer::Renderer;
 
 mod renderer;
@@ -14,16 +15,14 @@ mod config;
 mod buffer;
 mod resources;
 
-
-
-
-
-
-
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub async fn start() {
-    let width = config::SCREEN_SIZE[0];
-    let height = config::SCREEN_SIZE[1];
+
+    let config = GameConfig::new().await;
+
+
+    let width = config.options.screen_size[0];
+    let height = config.options.screen_size[1];
 
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
@@ -66,11 +65,15 @@ pub async fn start() {
     }
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut renderer = Renderer::new(&window).await;
+
+
+
+    let mut renderer = Renderer::new(&window, &config).await;
 
     let res = resources::load_binary("../res/chr.png").await.unwrap();
 
     renderer.set_texture(&res);
+    renderer.update_instance();
 
 
 
