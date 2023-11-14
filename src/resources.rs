@@ -1,37 +1,4 @@
 use cfg_if::cfg_if;
-use toml::Value;
-// #[cfg(target_arch = "wasm32")]
-// use wasm_bindgen::prelude::*;
-// #[cfg(target_arch = "wasm32")]
-// use js_sys::{Promise, Uint8Array};
-// #[cfg(target_arch = "wasm32")]
-// use wasm_bindgen_futures::JsFuture;
-//
-//
-// #[cfg(target_arch = "wasm32")]
-// #[wasm_bindgen]
-// extern "C" {
-//     #[wasm_bindgen(js_name = loadImage)]
-//     fn js_load_image(url: &str) -> Promise;
-// }
-//
-//
-// #[cfg(target_arch = "wasm32")]
-// #[wasm_bindgen]
-// pub async fn load_image(url: &str) -> Result<bool, JsValue> {
-//     let promise = js_load_image(url);
-//     let array_buffer = JsFuture::from(promise).await?;
-//     let uint8_array = Uint8Array::new(&array_buffer);
-//
-//     // Uint8Array를 Vec<u8>로 변환
-//     let mut result = Vec::new();
-//     for i in 0..uint8_array.length() {
-//         result.push(uint8_array.get_index(i) as u8);
-//     }
-//
-//     Ok(true)
-// }
-
 
 #[cfg(target_arch = "wasm32")]
 fn format_url(file_name: &str) -> reqwest::Url {

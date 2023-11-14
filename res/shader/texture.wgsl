@@ -33,8 +33,8 @@ fn vs_main(
 
     var out: VertexOutput;
     out.tex_coords = vec2(
-    instance.texcoord[0] * model.tex_coords[0] + instance.texcoord[1] * (1.0-model.tex_coords[0])  ,
-    instance.texcoord[2] * model.tex_coords[1] + instance.texcoord[3] * (1.0-model.tex_coords[1])
+        instance.texcoord[0] * model.tex_coords[0] + instance.texcoord[1] * (1.0-model.tex_coords[0])  ,
+        instance.texcoord[2] * model.tex_coords[1] + instance.texcoord[3] * (1.0-model.tex_coords[1])
     );
     out.clip_position =  model_matrix * vec4<f32>(model.position, 1.0);
     out.color = instance.color;
@@ -51,6 +51,7 @@ var s_diffuse: sampler;
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let texture = textureSample(t_diffuse, s_diffuse, in.tex_coords);
 
+//    let texture = textureLoad(t_diffuse, in.tex_coords,0);
     let alpha_threshold : f32 = 0.0;
     if ( texture.a <= alpha_threshold) {
         discard;

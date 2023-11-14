@@ -8,20 +8,30 @@ use crate::buffer::*;
 use winit::dpi::PhysicalSize;
 use crate::config::*;
 
+
+
 pub struct Renderer {
     pub device: Device,
     surface: Surface,
 
     pub queue: Queue,
     pub config: SurfaceConfiguration,
+    screen_buffer : [Tile; SCREEN_COLS * SCREEN_ROWS],
 
-    render_pipeline: RenderPipeline,
-    viewport_data: [f32; 6],
+
+    main_view : TextureView,
+
+    bind_group_layout: BindGroupLayout,
+
+    diffuse_render_pipeline: RenderPipeline,
+    post_render_pipeline: RenderPipeline,
 
     mesh: Mesh,
-    bind_group_layout: BindGroupLayout,
+    screen_mesh: Mesh,
+
+    sampler: Sampler,
     bind_group: Option<Arc<BindGroup>>,
-    screen_buffer : Vec<(u8, [f32;3])>
+    post_process_bind_group : BindGroup,
 }
 
 impl Renderer {
@@ -72,7 +82,10 @@ impl Renderer {
         };
         surface.configure(&device, &config);
 
-        let viewport_data = [0., 0., size.width as f32, size.height as f32, 0., 1.];
+        // let viewport_data = [0., 0., size.width as f32, size.height as f32, 0., 1.];
+
+
+
 
 
         let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -138,22 +151,125 @@ impl Renderer {
             multiview: None,
         });
 
-        let mesh = Mesh::new(&device);
+        let crt_shader = device.create_shader_module(include_wgsl!("../res/shader/crt.wgsl"));
+        let post_render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Base Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: VertexState {
+                module: &crt_shader,
+                entry_point: "vs_main",
+                buffers: &vec![Vertex::desc()],
+            },
+            fragment: Some(FragmentState {
+                module: &crt_shader,
+                entry_point: "fs_main",
+                targets: &[Some(ColorTargetState {
+                    format: surface_format,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: FrontFace::Ccw,
+                cull_mode: None,
+                polygon_mode: PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: true,
+            },
+            multiview: None,
+        });
 
-        let mut screen_buffer = game_config.get_map();
+
+        let main_texture = device.create_texture(&TextureDescriptor {
+            label: Some("Main render texture"),
+            size : Extent3d{
+                width : size.width,
+                height : size.height,
+                depth_or_array_layers:1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: surface_format,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+
+        let main_view = main_texture.create_view(&TextureViewDescriptor::default());
+        let sampler = device.create_sampler(&SamplerDescriptor {
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
+            mag_filter: FilterMode::Nearest,
+            min_filter: FilterMode::Nearest,
+            mipmap_filter: FilterMode::Linear,
+            ..Default::default()
+        });
+
+        let post_process_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&main_view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(&sampler),
+                }
+            ],
+            label: Some("diffuse_bind_group"),
+        });
+
+
+
+        let tile_size = [
+            2.0 / SCREEN_COLS as f32,
+            2.0 / SCREEN_ROWS as f32
+        ];
+        let mesh = Mesh::new(&device, &tile_size);
+        let screen_mesh = Mesh::new(&device, &[2.0,2.0]);
+
+
+        let mut screen_buffer = [ Tile::default(); SCREEN_ROWS * SCREEN_COLS];
+        let map = game_config.get_map();
+        for (index, tile) in map.iter().enumerate(){
+            screen_buffer[index].char = tile.char;
+            screen_buffer[index].color = tile.color;
+        }
+
+
+
+
+
         Self {
             device,
             surface,
             queue,
             config,
-            viewport_data,
             mesh,
-            render_pipeline,
+            screen_mesh,
+            diffuse_render_pipeline: render_pipeline,
             bind_group_layout,
             bind_group: None,
-            screen_buffer
+            sampler,
+            screen_buffer,
+            post_process_bind_group,
+            post_render_pipeline,
+            main_view,
         }
     }
+
+
 
     pub fn set_texture(&mut self, bytes: &[u8]) {
         // let img = image
@@ -193,15 +309,7 @@ impl Renderer {
         );
 
         let view = texture.create_view(&TextureViewDescriptor::default());
-        let sampler = self.device.create_sampler(&SamplerDescriptor {
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Nearest,
-            min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Linear,
-            ..Default::default()
-        });
+
 
         let diffuse_bind_group = self.device.create_bind_group(&BindGroupDescriptor {
             layout: &self.bind_group_layout,
@@ -212,7 +320,7 @@ impl Renderer {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(&sampler),
+                    resource: BindingResource::Sampler(&self.sampler),
                 }
             ],
             label: Some("diffuse_bind_group"),
@@ -221,11 +329,11 @@ impl Renderer {
         self.bind_group = Some(Arc::from(diffuse_bind_group));
     }
     pub fn update_instance(&mut self){
-        let instances = self.screen_buffer.iter().enumerate().map(|(i, &(char, color))|{
+        let instances = self.screen_buffer.iter().enumerate().map(|(i, &tile)|{
             TileRenderData{
-                char,
-                position: [i as u32 % SCREEN_COLS, i as u32 / SCREEN_COLS],
-                color
+                char : tile.char,
+                position: [i  % SCREEN_COLS, i  / SCREEN_COLS],
+                color : tile.color
             }.get_instance_matrix()
         }).collect::<Vec<_>>();
 
@@ -246,15 +354,44 @@ impl Renderer {
             .texture
             .create_view(&TextureViewDescriptor::default());
 
-        let mut encoder = self
-            .device
+        let mut encoder = self.device
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
 
         {
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("Render Pass"),
+                label: Some("Main Render Pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &self.main_view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            render_pass.set_pipeline(&self.diffuse_render_pipeline);
+
+            match &self.bind_group {
+                None => {}
+                Some(bg) => {
+                    render_pass.set_bind_group(0, bg, &[]);
+                    render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
+                    render_pass.set_vertex_buffer(1, self.mesh.instance_buffer.slice(..));
+                    render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), IndexFormat::Uint16);
+                    render_pass.draw_indexed(0..self.mesh.num_indices, 0, 0..self.mesh.num_instances);
+                }
+            }
+        }
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("Crt Post Process Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
@@ -268,26 +405,15 @@ impl Renderer {
                 occlusion_query_set: None,
             });
 
-            render_pass.set_viewport(self.viewport_data[0],
-                                     self.viewport_data[1],
-                                     self.viewport_data[2],
-                                     self.viewport_data[3],
-                                     self.viewport_data[4],
-                                     self.viewport_data[5]);
+            render_pass.set_pipeline(&self.post_render_pipeline);
 
 
-            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.post_process_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.screen_mesh.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.screen_mesh.index_buffer.slice(..), IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.screen_mesh.num_indices, 0, 0..1);
 
-            match &self.bind_group {
-                None => {}
-                Some(bg) => {
-                    render_pass.set_bind_group(0, bg, &[]);
-                    render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
-                    render_pass.set_vertex_buffer(1, self.mesh.instance_buffer.slice(..));
-                    render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), IndexFormat::Uint16);
-                    render_pass.draw_indexed(0..self.mesh.num_indices, 0, 0..self.mesh.num_instances);
-                }
-            }
+
         }
 
 

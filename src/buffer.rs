@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use wgpu::*;
-use wgpu::util::DeviceExt;
+use util::DeviceExt;
 use crate::config::*;
 
 
@@ -77,7 +77,7 @@ impl InstanceTileRaw {
 
 pub struct TileRenderData {
     pub char: u8,
-    pub position: [u32; 2],
+    pub position: [usize; 2],
     pub color : [f32;3]
 }
 
@@ -117,9 +117,9 @@ pub struct Mesh {
 }
 impl Mesh {
 
-    pub fn new(device : &Device) -> Self {
-        let x_size = 2.0 / SCREEN_COLS as f32;
-        let y_size = 2.0 / SCREEN_ROWS as f32;
+    pub fn new(device : &Device, size : &[f32;2]) -> Self {
+        let x_size = size[0];//2.0 / SCREEN_COLS as f32;
+        let y_size = size[1];//2.0 / SCREEN_ROWS as f32;
         //region [ Vertex Data ]
         let vertex: [Vertex; 4] = [
             //Front
@@ -153,18 +153,18 @@ impl Mesh {
         //endregion
 
         let vertex_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
+            &util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
                 contents: bytemuck::cast_slice(&vertex),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
             }
         );
 
         let index_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
+            &util::BufferInitDescriptor {
                 label: Some("Index Buffer"),
                 contents: bytemuck::cast_slice(&indices),
-                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                usage: BufferUsages::INDEX | BufferUsages::COPY_DST,
             }
         );
 
@@ -172,10 +172,10 @@ impl Mesh {
 
         let instances:Vec<InstanceTileRaw> = Vec::new();
         let instance_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
+            &util::BufferInitDescriptor {
                 label: Some(format!("Instance Buffer").as_str()),
                 contents: bytemuck::cast_slice(&instances),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
             }
         );
         let num_instances = instances.len() as u32;
@@ -191,7 +191,7 @@ impl Mesh {
 
 
 
-    pub fn replace_instance(&mut self, buffer: wgpu::Buffer , num_instance : u32){
+    pub fn replace_instance(&mut self, buffer: Buffer , num_instance : u32){
         self.instance_buffer = buffer;
         self.num_instances = num_instance;
     }
