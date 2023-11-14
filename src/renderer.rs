@@ -1,5 +1,7 @@
+use std::alloc::System;
 use std::iter;
 use std::sync::Arc;
+use std::time::SystemTime;
 use image::GenericImageView;
 use winit::window::Window;
 use wgpu::*;
@@ -21,17 +23,23 @@ pub struct Renderer {
 
     main_view : TextureView,
 
-    bind_group_layout: BindGroupLayout,
+    texture_bind_group_layout: BindGroupLayout,
+    time_bind_group:BindGroup,
+    time_buffer:Buffer,
 
     diffuse_render_pipeline: RenderPipeline,
     post_render_pipeline: RenderPipeline,
 
-    mesh: Mesh,
-    screen_mesh: Mesh,
+
 
     sampler: Sampler,
     bind_group: Option<Arc<BindGroup>>,
     post_process_bind_group : BindGroup,
+
+    mesh: Mesh,
+    screen_mesh: Mesh,
+
+    init_time : SystemTime
 }
 
 impl Renderer {
@@ -87,8 +95,41 @@ impl Renderer {
 
 
 
+        //region [ Main Render Path ]
 
-        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        let time_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor{
+            label: Some("time_bind_group_layout"),
+            entries: &[
+                BindGroupLayoutEntry{
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }
+            ],
+        });
+        let time_buffer = device.create_buffer_init(
+            &util::BufferInitDescriptor {
+                label: Some("Time Buffer"),
+                contents: bytemuck::cast_slice(&[0.5]),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            }
+        );
+        let time_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("time_bind_group"),
+            layout: &time_bind_group_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: time_buffer.as_entire_binding(),
+                }
+            ],
+        });
+        let texture_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             entries: &[
                 BindGroupLayoutEntry {
                     binding: 0,
@@ -111,14 +152,17 @@ impl Renderer {
         });
 
         let shader = device.create_shader_module(include_wgsl!("../res/shader/texture.wgsl"));
-        let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        let diffuse_render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[
+                &texture_bind_group_layout,
+                &time_bind_group_layout
+            ],
             push_constant_ranges: &[],
         });
-        let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+        let diffuse_render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Base Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
+            layout: Some(&diffuse_render_pipeline_layout),
             vertex: VertexState {
                 module: &shader,
                 entry_point: "vs_main",
@@ -151,10 +195,20 @@ impl Renderer {
             multiview: None,
         });
 
+        //endregion
+
+        //region [ Post Render Path ]
         let crt_shader = device.create_shader_module(include_wgsl!("../res/shader/crt.wgsl"));
+        let post_render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[
+                &texture_bind_group_layout
+            ],
+            push_constant_ranges: &[],
+        });
         let post_render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("Base Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
+            label: Some("Post Render Pipeline"),
+            layout: Some(&post_render_pipeline_layout),
             vertex: VertexState {
                 module: &crt_shader,
                 entry_point: "vs_main",
@@ -186,8 +240,6 @@ impl Renderer {
             },
             multiview: None,
         });
-
-
         let main_texture = device.create_texture(&TextureDescriptor {
             label: Some("Main render texture"),
             size : Extent3d{
@@ -202,8 +254,6 @@ impl Renderer {
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
-
-
         let main_view = main_texture.create_view(&TextureViewDescriptor::default());
         let sampler = device.create_sampler(&SamplerDescriptor {
             address_mode_u: AddressMode::ClampToEdge,
@@ -214,9 +264,8 @@ impl Renderer {
             mipmap_filter: FilterMode::Linear,
             ..Default::default()
         });
-
         let post_process_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            layout: &bind_group_layout,
+            layout: &texture_bind_group_layout,
             entries: &[
                 BindGroupEntry {
                     binding: 0,
@@ -230,7 +279,7 @@ impl Renderer {
             label: Some("diffuse_bind_group"),
         });
 
-
+        //endregion
 
         let tile_size = [
             2.0 / SCREEN_COLS as f32,
@@ -248,7 +297,7 @@ impl Renderer {
         }
 
 
-
+        let init_time = SystemTime::now();
 
 
         Self {
@@ -258,14 +307,17 @@ impl Renderer {
             config,
             mesh,
             screen_mesh,
-            diffuse_render_pipeline: render_pipeline,
-            bind_group_layout,
+            diffuse_render_pipeline,
+            time_bind_group,
+            time_buffer,
+            texture_bind_group_layout,
             bind_group: None,
             sampler,
             screen_buffer,
             post_process_bind_group,
             post_render_pipeline,
             main_view,
+            init_time
         }
     }
 
@@ -312,7 +364,7 @@ impl Renderer {
 
 
         let diffuse_bind_group = self.device.create_bind_group(&BindGroupDescriptor {
-            layout: &self.bind_group_layout,
+            layout: &self.texture_bind_group_layout,
             entries: &[
                 BindGroupEntry {
                     binding: 0,
@@ -328,7 +380,7 @@ impl Renderer {
 
         self.bind_group = Some(Arc::from(diffuse_bind_group));
     }
-    pub fn update_instance(&mut self){
+    pub fn init_instances(&mut self){
         let instances = self.screen_buffer.iter().enumerate().map(|(i, &tile)|{
             TileRenderData{
                 char : tile.char,
@@ -349,10 +401,16 @@ impl Renderer {
         self.mesh.replace_instance(instance_buffer, num_instances);
     }
     pub fn render(&self) -> Result<(), SurfaceError> {
+
+        let render_time = SystemTime::now().duration_since(self.init_time).expect("Time went backwards");
+        let time_data:[f32;1] = [render_time.as_millis() as f32];
+        self.queue.write_buffer(&self.time_buffer, 0, bytemuck::cast_slice(&[time_data]));
+
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&TextureViewDescriptor::default());
+
 
         let mut encoder = self.device
             .create_command_encoder(&CommandEncoderDescriptor {
@@ -381,6 +439,7 @@ impl Renderer {
                 None => {}
                 Some(bg) => {
                     render_pass.set_bind_group(0, bg, &[]);
+                    render_pass.set_bind_group(1, &self.time_bind_group , &[]);
                     render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
                     render_pass.set_vertex_buffer(1, self.mesh.instance_buffer.slice(..));
                     render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), IndexFormat::Uint16);

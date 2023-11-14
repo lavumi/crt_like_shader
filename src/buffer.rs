@@ -92,11 +92,12 @@ impl TileRenderData {
             (char_y) as f32 * CHR_UV,
             (char_y+1) as f32 * CHR_UV,
         ];
-        let model = cgmath::Matrix4::from_translation(cgmath::Vector3 {
-            x: self.position[0] as f32 / SCREEN_COLS as f32 * 2.0 - 1.0,
-            y: self.position[1] as f32 / SCREEN_ROWS as f32 * - 2.0 + 1.0,
-            z: 0.0
-        }).into();
+
+        let x =  self.position[0] as f32 / SCREEN_COLS as f32 * 2.0 - 1.0;
+        let y =  self.position[1] as f32 / SCREEN_ROWS as f32 * - 2.0 + 1.0;
+        let z = 0.0;//-pow( x * x + y * y,5) ;
+
+        let model = cgmath::Matrix4::from_translation(cgmath::Vector3 { x, y, z }).into();
         let color = self.color;
         InstanceTileRaw {
             uv,

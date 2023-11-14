@@ -73,7 +73,7 @@ pub async fn start() {
     let res = resources::load_binary("../res/chr.png").await.unwrap();
 
     renderer.set_texture(&res);
-    renderer.update_instance();
+    renderer.init_instances();
 
 
 
