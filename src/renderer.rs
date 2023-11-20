@@ -23,6 +23,8 @@ pub struct Renderer {
 
     main_view : TextureView,
 
+    camera_bind_group: BindGroup,
+
     texture_bind_group_layout: BindGroupLayout,
     time_bind_group:BindGroup,
     time_buffer:Buffer,
@@ -39,7 +41,8 @@ pub struct Renderer {
     mesh: Mesh,
     screen_mesh: Mesh,
 
-    init_time : SystemTime
+    init_time : SystemTime,
+
 }
 
 impl Renderer {
@@ -96,13 +99,12 @@ impl Renderer {
 
 
         //region [ Main Render Path ]
-
-        let time_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor{
-            label: Some("time_bind_group_layout"),
+        let camera_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor{
+            label: Some("camera_bind_group_layout"),
             entries: &[
                 BindGroupLayoutEntry{
                     binding: 0,
-                    visibility: ShaderStages::FRAGMENT,
+                    visibility: ShaderStages::VERTEX,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -112,23 +114,23 @@ impl Renderer {
                 }
             ],
         });
-        let time_buffer = device.create_buffer_init(
-            &util::BufferInitDescriptor {
-                label: Some("Time Buffer"),
-                contents: bytemuck::cast_slice(&[0.5]),
-                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            }
-        );
-        let time_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("time_bind_group"),
-            layout: &time_bind_group_layout,
+        let camera_matrix: [[f32; 4]; 4] = Renderer::make_camera_view().into();
+        let camera_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+            label: Some("Camera Buffer"),
+            contents: bytemuck::cast_slice(&[camera_matrix]),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+        let camera_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("camera_bind_group"),
+            layout: &camera_bind_group_layout,
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: time_buffer.as_entire_binding(),
+                    resource: camera_buffer.as_entire_binding(),
                 }
             ],
         });
+
         let texture_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             entries: &[
                 BindGroupLayoutEntry {
@@ -151,10 +153,42 @@ impl Renderer {
             label: Some("texture_bind_group_layout"),
         });
 
+        let time_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor{
+            label: Some("time_bind_group_layout"),
+            entries: &[
+                BindGroupLayoutEntry{
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }
+            ],
+        });
+        let time_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some("Time Buffer"),
+                contents: bytemuck::cast_slice(&[0.5]),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            });
+        let time_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("time_bind_group"),
+            layout: &time_bind_group_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: time_buffer.as_entire_binding(),
+                }
+            ],
+        });
+
         let shader = device.create_shader_module(include_wgsl!("../res/shader/texture.wgsl"));
         let diffuse_render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[
+                &camera_bind_group_layout,
                 &texture_bind_group_layout,
                 &time_bind_group_layout
             ],
@@ -286,16 +320,16 @@ impl Renderer {
             2.0 / SCREEN_ROWS as f32
         ];
         let mesh = Mesh::new(&device, &tile_size);
+
+
+
         let screen_mesh = Mesh::new(&device, &[2.0,2.0]);
-
-
         let mut screen_buffer = [ Tile::default(); SCREEN_ROWS * SCREEN_COLS];
         let map = game_config.get_map();
         for (index, tile) in map.iter().enumerate(){
             screen_buffer[index].char = tile.char;
             screen_buffer[index].color = tile.color;
         }
-
 
         let init_time = SystemTime::now();
 
@@ -317,11 +351,26 @@ impl Renderer {
             post_process_bind_group,
             post_render_pipeline,
             main_view,
-            init_time
+            init_time,
+            camera_bind_group
         }
     }
 
 
+
+    fn make_camera_view()-> cgmath::Matrix4<f32> {
+        let eye : cgmath::Point3<f32> =(0.0, 0.0, 3.0).into();
+        let target: cgmath::Point3<f32>=(0.0, 0.0, 0.0).into();
+        let up: cgmath::Vector3<f32>=cgmath::Vector3::unit_y();
+        let aspect:f32 = 1.0;
+        let fov_y:f32 = 45.0;
+        let z_near:f32 = 0.1;
+        let z_far:f32 = 100.0;
+
+        let view = cgmath::Matrix4::look_at_rh(eye, target, up);
+        let proj = cgmath::perspective(cgmath::Deg(fov_y), aspect, z_near, z_far);
+        OPENGL_TO_WGPU_MATRIX * proj * view
+    }
 
     pub fn set_texture(&mut self, bytes: &[u8]) {
         // let img = image
@@ -438,8 +487,9 @@ impl Renderer {
             match &self.bind_group {
                 None => {}
                 Some(bg) => {
-                    render_pass.set_bind_group(0, bg, &[]);
-                    render_pass.set_bind_group(1, &self.time_bind_group , &[]);
+                    render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                    render_pass.set_bind_group(1, bg, &[]);
+                    render_pass.set_bind_group(2, &self.time_bind_group , &[]);
                     render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
                     render_pass.set_vertex_buffer(1, self.mesh.instance_buffer.slice(..));
                     render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), IndexFormat::Uint16);
@@ -463,9 +513,7 @@ impl Renderer {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-
             render_pass.set_pipeline(&self.post_render_pipeline);
-
 
             render_pass.set_bind_group(0, &self.post_process_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.screen_mesh.vertex_buffer.slice(..));
@@ -481,3 +529,11 @@ impl Renderer {
         Ok(())
     }
 }
+
+#[rustfmt::skip]
+const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 0.5, 0.0,
+    0.0, 0.0, 0.5, 1.0,
+);

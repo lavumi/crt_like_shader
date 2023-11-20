@@ -1,3 +1,7 @@
+struct CameraUniform {
+    view_proj: mat4x4<f32>,
+};
+
 struct InstanceInput {
     @location(3) texcoord: vec4<f32>,
     @location(4) matrix_0: vec4<f32>,
@@ -11,6 +15,10 @@ struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) tex_coords: vec2<f32>,
 }
+
+@group(0) @binding(0) // 1.
+var<uniform> camera: CameraUniform;
+
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -38,19 +46,19 @@ fn vs_main(
         instance.texcoord[2] * model.tex_coords[1] + instance.texcoord[3] * (1.0-model.tex_coords[1])
     );
     let position = model_matrix * vec4<f32>(model.position, 1.0);
-    out.clip_position = position;
+    out.clip_position = camera.view_proj *  position;
     out.color = instance.color;
     out.position = position.xyz;
     return out;
 }
 
 
-@group(0) @binding(0)
+@group(1) @binding(0)
 var t_diffuse: texture_2d<f32>;
-@group(0) @binding(1)
+@group(1) @binding(1)
 var s_diffuse: sampler;
 
-@group(1) @binding(0)
+@group(2) @binding(0)
 var<uniform> time: f32;
 
 @fragment
@@ -59,7 +67,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let alpha_threshold : f32 = 0.5;
     let texture_rgb = in.color * step(alpha_threshold, texture.a);
-
 
     let tv_border = add_tv_border(in.position.xy);
     let factor = add_scan_line( in.position.y );
@@ -99,11 +106,27 @@ fn add_tv_border( modelPos : vec2<f32>) -> vec4<f32> {
     let distToBorderH = abs(abs(modelPos.x) - 1.0);
     let distToBorderV = abs(abs(modelPos.y) - 1.0);
     let distToBorder = min(distToBorderH, distToBorderV);
-    let f = 1.0 -smoothstep(0.0, 0.02, distToBorder);
+    let f = 1.0 -smoothstep(0.0, 0.2, distToBorder);
     return vec4(f, f, f, 1.0) * 0.02;
 }
 
 
+
+// Original Source:
+// https://github.com/ashima/webgl-noise/blob/master/src/noise3D.glsl
+// (MIT licensed)
+//
+// Description : Array and textureless GLSL 2D/3D/4D simplex
+//               noise functions.
+//      Author : Ian McEwan, Ashima Arts.
+//  Maintainer : stegu
+//     Lastmod : 20201014 (stegu)
+//     License : Copyright (C) 2011 Ashima Arts. All rights reserved.
+//               Distributed under the MIT License. See LICENSE file.
+//               https://github.com/ashima/webgl-noise
+//               https://github.com/stegu/webgl-noise
+//
+// Convert to wgsl
 fn mod289( x:vec3<f32>)->vec3<f32> {
     return x - floor(x * (1.0 / 289.0)) * 289.0;
 }
