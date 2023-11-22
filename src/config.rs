@@ -48,7 +48,6 @@ pub struct GameConfig {
 
 }
 
-
 impl GameConfig {
     pub async fn new()->Self{
         let str = load_string("game_config.toml").await.unwrap();

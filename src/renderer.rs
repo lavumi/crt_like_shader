@@ -1,7 +1,6 @@
-use std::alloc::System;
 use std::iter;
+use instant::Instant;
 use std::sync::Arc;
-use std::time::SystemTime;
 use image::GenericImageView;
 use winit::window::Window;
 use wgpu::*;
@@ -41,7 +40,7 @@ pub struct Renderer {
     mesh: Mesh,
     screen_mesh: Mesh,
 
-    init_time : SystemTime,
+    init_time : Instant,
 
 }
 
@@ -170,7 +169,7 @@ impl Renderer {
         });
         let time_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
                 label: Some("Time Buffer"),
-                contents: bytemuck::cast_slice(&[0.5]),
+                contents: bytemuck::cast_slice(&[0.5, 0.0, 0.0, 0.0]),
                 usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             });
         let time_bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -331,7 +330,7 @@ impl Renderer {
             screen_buffer[index].color = tile.color;
         }
 
-        let init_time = SystemTime::now();
+        let init_time = Instant::now();
 
 
         Self {
@@ -451,8 +450,8 @@ impl Renderer {
     }
     pub fn render(&self) -> Result<(), SurfaceError> {
 
-        let render_time = SystemTime::now().duration_since(self.init_time).expect("Time went backwards");
-        let time_data:[f32;1] = [render_time.as_millis() as f32];
+        let render_time = Instant::now().duration_since(self.init_time);
+        let time_data:[f32;4] = [render_time.as_millis() as f32, 0.0, 0.0, 0.0];
         self.queue.write_buffer(&self.time_buffer, 0, bytemuck::cast_slice(&[time_data]));
 
         let output = self.surface.get_current_texture()?;

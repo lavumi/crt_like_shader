@@ -26,11 +26,10 @@
 <script type="module">
     import init from "./pkg/crt_like_js_renderer.js";
     init().then(() => {
-        console.log("WASM Loaded", );
+        console.log("WASM Loaded");
         let canvas = document.getElementById("wasm-canvas");
         canvas.style.height = "100%";
         canvas.style.width = "auto";
-        window.init = init;
     });
 </script>
 </body>

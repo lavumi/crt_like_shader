@@ -59,7 +59,7 @@ var t_diffuse: texture_2d<f32>;
 var s_diffuse: sampler;
 
 @group(2) @binding(0)
-var<uniform> time: f32;
+var<uniform> time: vec4<f32>;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -77,7 +77,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 fn add_noise(modelPos : vec3<f32>, color : vec3<f32>) -> vec3<f32>{
     let mul_model_pos = modelPos * 100.0;
-    let t = time * 4.0;
+    let t = time[0] * 4.0;
     let factor1 = 1.0 - time_noise(mul_model_pos, t) * 0.25;
     let baseColor = vec3(
       time_noise(mul_model_pos, t),

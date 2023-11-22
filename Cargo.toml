@@ -22,6 +22,7 @@ log = "0.4.20"
 anyhow = { version = "1.0.75", features = [] }
 toml = "0.8.6"
 serde = {version =  "1.0.190",features = ["derive"] }
+instant = "0.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 reqwest = "0.11"
@@ -37,6 +38,7 @@ web-sys = { version = "0.3.53", features = [
     "Location",
 ]}
 js-sys = "0.3.65"
+instant = { version = "0.1", features = [ "wasm-bindgen" ] }
 
 
 [build-dependencies]
