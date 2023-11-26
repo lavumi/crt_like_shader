@@ -1,76 +1,54 @@
-struct CameraUniform {
-    view_proj: mat4x4<f32>,
-};
-
-struct InstanceInput {
-    @location(3) texcoord: vec4<f32>,
-    @location(4) matrix_0: vec4<f32>,
-    @location(5) matrix_1: vec4<f32>,
-    @location(6) matrix_2: vec4<f32>,
-    @location(7) matrix_3: vec4<f32>,
-    @location(8) color: vec3<f32>,
-};
-
 struct VertexInput {
     @location(0) position: vec3<f32>,
-    @location(1) tex_coords: vec2<f32>,
+//    @location(1) tex_coords: vec2<f32>,
 }
-
-@group(0) @binding(0) // 1.
-var<uniform> camera: CameraUniform;
-
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
-    @location(1) color: vec3<f32>,
-    @location(2) position: vec3<f32>,
+    @location(1) position: vec3<f32>,
 }
 
 @vertex
 fn vs_main(
-    model: VertexInput,
-    instance: InstanceInput,
+    model: VertexInput
 ) -> VertexOutput {
-
-    let model_matrix = mat4x4<f32>(
-        instance.matrix_0,
-        instance.matrix_1,
-        instance.matrix_2,
-        instance.matrix_3,
-    );
-
     var out: VertexOutput;
-    out.tex_coords = vec2(
-        instance.texcoord[0] * model.tex_coords[0] + instance.texcoord[1] * (1.0-model.tex_coords[0])  ,
-        instance.texcoord[2] * model.tex_coords[1] + instance.texcoord[3] * (1.0-model.tex_coords[1])
-    );
-    let position = model_matrix * vec4<f32>(model.position, 1.0);
-    out.clip_position = camera.view_proj *  position;
-    out.color = instance.color;
-    out.position = position.xyz;
+    var position = model.position + vec3<f32>(-1.0,1.0,0.0);
+    out.tex_coords = vec2<f32>(
+        model.position[0] * 0.5,
+        - model.position[1] * 0.5,
+    ) ;
+    out.clip_position = vec4<f32>(position, 1.0);
+    out.position = position;
     return out;
 }
 
 
-@group(1) @binding(0)
+@group(0) @binding(0)
 var t_diffuse: texture_2d<f32>;
-@group(1) @binding(1)
+@group(0) @binding(1)
 var s_diffuse: sampler;
 
-@group(2) @binding(0)
+
+@group(1) @binding(0)
 var<uniform> time: vec4<f32>;
+
+
+
+
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+//       return vec4<f32> (in.tex_coords, 0.0,1.0);
+
+
     let texture = textureSample(t_diffuse, s_diffuse, in.tex_coords);
 
     let alpha_threshold : f32 = 0.5;
-    let texture_rgb = in.color * step(alpha_threshold, texture.a);
-
     let tv_border = add_tv_border(in.position.xy);
     let factor = add_scan_line( in.position.y );
-    let color = add_noise(in.position , texture_rgb);
+    let color = add_noise(in.position , texture.rgb);
 
     return vec4<f32>( color * factor, 1.0) + tv_border;
 }
@@ -221,3 +199,45 @@ fn time_noise(modelPos: vec3<f32> , time : f32) -> f32 {
 
       return 105.0 * dot( m*m, vec4<f32>(dot(p0,x0), dot(p1,x1),dot(p2,x2), dot(p3,x3)));
 }
+
+
+
+//const BLURSCALEX : f32 = 2.45;
+//const LOWLUMSCAN : f32 =  10.0;
+//const HILUMSCAN : f32 =  10.0;
+//const BRIGHTBOOST : f32 =  0.25;
+//const MASK_DARK : f32 =  0.25;
+//const MASK_FADE : f32 =  0.8;
+
+//@fragment
+//fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+//
+//    let texture_size = vec2<f32>(800.0,600.0);
+//    let output_size = vec2<f32>(800.0,600.0);
+//    let input_size = vec2<f32>(800.0,600.0);
+//
+//    let ratio = texture_size.x / input_size.x;
+//
+//    let inv_dims = 1.0 / texture_size;
+//
+//
+//    let p0 = in.tex_coords * texture_size;
+//    let i = floor(p0) + 0.50;
+//    let f = p0 - i;
+//    var p = (i + 4.0*f*f*f) * inv_dims;
+//    p.x = mix( p.x , in.tex_coords.x, BLURSCALEX);
+//
+//    let Y = f.y*f.y;
+//    let YY = Y*Y;
+//
+//    let whichmask = floor(in.tex_coords.x * output_size.x * ratio)*-0.5;
+//    let mask = 1.0 + f32(fract(whichmask) < 0.5) * -MASK_DARK;
+//
+//
+//    let colour = vec3<f32>(1.0,1.0,1.0);//textureSample(t_diffuse, s_diffuse, in.tex_coords).rgb;
+//
+//    let scanLineWeight = (BRIGHTBOOST - LOWLUMSCAN*(Y - 2.05*YY));
+//    let scanLineWeightB = 1.0 - HILUMSCAN*(YY - 2.8 * YY * Y);
+//
+//    return vec4<f32>(colour.rgb * mix(scanLineWeight*mask, scanLineWeightB, dot(colour.rgb,vec3(MASK_FADE * 0.33333))),1.0);
+//}

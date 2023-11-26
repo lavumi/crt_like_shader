@@ -104,7 +104,6 @@ impl TileRenderData {
             model,
             color
         }
-
     }
 }
 

@@ -183,13 +183,12 @@ impl Renderer {
             ],
         });
 
-        let shader = device.create_shader_module(include_wgsl!("../res/shader/texture.wgsl"));
+        let shader = device.create_shader_module(include_wgsl!("../res/shader/colour_tile.wgsl"));
         let diffuse_render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[
                 &camera_bind_group_layout,
-                &texture_bind_group_layout,
-                &time_bind_group_layout
+                &texture_bind_group_layout
             ],
             push_constant_ranges: &[],
         });
@@ -231,11 +230,12 @@ impl Renderer {
         //endregion
 
         //region [ Post Render Path ]
-        let crt_shader = device.create_shader_module(include_wgsl!("../res/shader/crt.wgsl"));
+        let crt_shader = device.create_shader_module(include_wgsl!("../res/shader/post_crt.wgsl"));
         let post_render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[
-                &texture_bind_group_layout
+                &texture_bind_group_layout,
+                &time_bind_group_layout
             ],
             push_constant_ranges: &[],
         });
@@ -358,6 +358,8 @@ impl Renderer {
 
 
     fn make_camera_view()-> cgmath::Matrix4<f32> {
+
+
         let eye : cgmath::Point3<f32> =(0.0, 0.0, 3.0).into();
         let target: cgmath::Point3<f32>=(0.0, 0.0, 0.0).into();
         let up: cgmath::Vector3<f32>=cgmath::Vector3::unit_y();
@@ -367,8 +369,12 @@ impl Renderer {
         let z_far:f32 = 100.0;
 
         let view = cgmath::Matrix4::look_at_rh(eye, target, up);
-        let proj = cgmath::perspective(cgmath::Deg(fov_y), aspect, z_near, z_far);
-        OPENGL_TO_WGPU_MATRIX * proj * view
+        // let proj = cgmath::perspective(cgmath::Deg(fov_y), aspect, z_near, z_far);
+
+        let ortho = cgmath::ortho(-1.0, 1.0, -1.0, 1.0, 1.0, 99.0);
+
+
+        OPENGL_TO_WGPU_MATRIX * ortho * view
     }
 
     pub fn set_texture(&mut self, bytes: &[u8]) {
@@ -488,7 +494,6 @@ impl Renderer {
                 Some(bg) => {
                     render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
                     render_pass.set_bind_group(1, bg, &[]);
-                    render_pass.set_bind_group(2, &self.time_bind_group , &[]);
                     render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
                     render_pass.set_vertex_buffer(1, self.mesh.instance_buffer.slice(..));
                     render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), IndexFormat::Uint16);
@@ -515,6 +520,7 @@ impl Renderer {
             render_pass.set_pipeline(&self.post_render_pipeline);
 
             render_pass.set_bind_group(0, &self.post_process_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.time_bind_group , &[]);
             render_pass.set_vertex_buffer(0, self.screen_mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.screen_mesh.index_buffer.slice(..), IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.screen_mesh.num_indices, 0, 0..1);
