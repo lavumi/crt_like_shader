@@ -3,6 +3,7 @@
 use wasm_bindgen::prelude::*;
 
 
+use std::sync::{Arc, Mutex};
 use winit::dpi::*;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -45,7 +46,7 @@ pub async fn start() {
         builder.with_append(true)
             .with_inner_size(PhysicalSize::new(width,height))
     };
-    let window = builder.build(&event_loop).unwrap();
+    let window = Arc::new(builder.build(&event_loop).unwrap());
 
 
     #[cfg(target_arch = "wasm32")]
@@ -68,13 +69,15 @@ pub async fn start() {
 
 
 
-    let mut renderer = Renderer::new(&window, &config).await;
+    let renderer = Arc::new(Mutex::new(Renderer::new(window.clone(), &config).await));
 
     let res = resources::load_binary("../res/chr.png").await.unwrap();
 
-    renderer.set_texture(&res);
-    renderer.init_instances();
-
+    {
+        let mut renderer = renderer.lock().unwrap();
+        renderer.set_texture(&res);
+        renderer.init_instances();
+    }
 
 
 
@@ -95,7 +98,7 @@ pub async fn start() {
                 // You only need to call this if you've determined that you need to redraw, in
                 // applications which do not always need to. Applications that redraw continuously
                 // can just render here instead.
-                renderer.render().expect("TODO: panic message");
+                renderer.lock().unwrap().render().expect("TODO: panic message");
                 window.request_redraw();
             },
             Event::WindowEvent {

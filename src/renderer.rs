@@ -13,7 +13,7 @@ use crate::config::*;
 
 pub struct Renderer {
     pub device: Device,
-    surface: Surface,
+    surface: Arc<Surface<'static>>,
 
     pub queue: Queue,
     pub config: SurfaceConfiguration,
@@ -45,10 +45,10 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub async fn new(window: &Window, game_config: &GameConfig) -> Self {
+    pub async fn new(window: Arc<Window>, game_config: &GameConfig) -> Self {
         let size = PhysicalSize::new(game_config.options.screen_size[0] * 2, game_config.options.screen_size[1] * 2);
-        let instance = Instance::new(InstanceDescriptor::default());
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let instance = Instance::new(&InstanceDescriptor::default());
+        let surface = Arc::new(instance.create_surface(window).unwrap());
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
                 power_preference: PowerPreference::default(),
@@ -61,17 +61,18 @@ impl Renderer {
             .request_device(
                 &DeviceDescriptor {
                     label: None,
-                    features: Features::empty(),
+                    required_features: Features::empty(),
                     // WebGL doesn't support all of wgpu`s features, so if
                     // we're building for the web we'll have to disable some.
-                    limits: if cfg!(target_arch = "wasm32") {
+                    required_limits: if cfg!(target_arch = "wasm32") {
                         Limits::downlevel_webgl2_defaults()
                     } else {
                         Limits::default()
                     },
+                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                    memory_hints: wgpu::MemoryHints::default(),
+                    trace: wgpu::Trace::Off,
                 },
-                // Some(&std::path::Path::new("trace")), // Trace path
-                None,
             )
             .await
             .unwrap();
@@ -89,6 +90,7 @@ impl Renderer {
             present_mode: surface_caps.present_modes[0],
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
+            desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
 
@@ -197,17 +199,19 @@ impl Renderer {
             layout: Some(&diffuse_render_pipeline_layout),
             vertex: VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &vec![Vertex::desc(), InstanceTileRaw::desc()],
+                compilation_options: PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: surface_format,
                     blend: Some(BlendState::ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 })],
+                compilation_options: PipelineCompilationOptions::default(),
             }),
             primitive: PrimitiveState {
                 topology: PrimitiveTopology::TriangleList,
@@ -225,6 +229,7 @@ impl Renderer {
                 alpha_to_coverage_enabled: true,
             },
             multiview: None,
+            cache: None,
         });
 
         //endregion
@@ -244,17 +249,19 @@ impl Renderer {
             layout: Some(&post_render_pipeline_layout),
             vertex: VertexState {
                 module: &crt_shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &vec![Vertex::desc()],
+                compilation_options: PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
                 module: &crt_shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: surface_format,
                     blend: Some(BlendState::ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 })],
+                compilation_options: PipelineCompilationOptions::default(),
             }),
             primitive: PrimitiveState {
                 topology: PrimitiveTopology::TriangleList,
@@ -272,6 +279,7 @@ impl Renderer {
                 alpha_to_coverage_enabled: true,
             },
             multiview: None,
+            cache: None,
         });
         let main_texture = device.create_texture(&TextureDescriptor {
             label: Some("Main render texture"),
@@ -399,14 +407,14 @@ impl Renderer {
             view_formats: &[],
         });
         self.queue.write_texture(
-            ImageCopyTexture {
-                aspect: TextureAspect::All,
+            wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
-                origin: Origin3d::ZERO,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
             },
             &rgba,
-            ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Option::from(4 * dimensions.0),
                 rows_per_image: Option::from(dimensions.1),
@@ -481,6 +489,7 @@ impl Renderer {
                         load: LoadOp::Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }),
                         store: StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
@@ -493,7 +502,7 @@ impl Renderer {
                 None => {}
                 Some(bg) => {
                     render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-                    render_pass.set_bind_group(1, bg, &[]);
+                    render_pass.set_bind_group(1, bg.as_ref(), &[]);
                     render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
                     render_pass.set_vertex_buffer(1, self.mesh.instance_buffer.slice(..));
                     render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), IndexFormat::Uint16);
@@ -512,6 +521,7 @@ impl Renderer {
                         load: LoadOp::Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }),
                         store: StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
