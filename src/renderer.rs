@@ -16,7 +16,6 @@ pub struct Renderer {
     surface: Arc<Surface<'static>>,
 
     pub queue: Queue,
-    pub config: SurfaceConfiguration,
     screen_buffer : [Tile; SCREEN_COLS * SCREEN_ROWS],
 
 
@@ -345,7 +344,6 @@ impl Renderer {
             device,
             surface,
             queue,
-            config,
             mesh,
             screen_mesh,
             diffuse_render_pipeline,
@@ -371,10 +369,10 @@ impl Renderer {
         let eye : cgmath::Point3<f32> =(0.0, 0.0, 3.0).into();
         let target: cgmath::Point3<f32>=(0.0, 0.0, 0.0).into();
         let up: cgmath::Vector3<f32>=cgmath::Vector3::unit_y();
-        let aspect:f32 = 1.0;
-        let fov_y:f32 = 45.0;
-        let z_near:f32 = 0.1;
-        let z_far:f32 = 100.0;
+        // let aspect:f32 = 1.0;
+        // let fov_y:f32 = 45.0;
+        // let z_near:f32 = 0.1;
+        // let z_far:f32 = 100.0;
 
         let view = cgmath::Matrix4::look_at_rh(eye, target, up);
         // let proj = cgmath::perspective(cgmath::Deg(fov_y), aspect, z_near, z_far);

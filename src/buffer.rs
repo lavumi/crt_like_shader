@@ -13,7 +13,7 @@ pub struct Vertex {
 
 impl Vertex {
     const ATTRIBS: [VertexAttribute; 2] =
-        vertex_attr_array![0 => Float32x3, 1 => Float32x3];
+        vertex_attr_array![0 => Float32x3, 1 => Float32x2];
 
     pub fn desc<'a>() -> VertexBufferLayout<'a> {
         VertexBufferLayout {
